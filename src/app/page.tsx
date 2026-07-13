@@ -1,65 +1,39 @@
-import Image from "next/image";
+import { ArrowDown, PackageCheck, ShieldCheck, Sparkles, Truck } from "lucide-react";
+import Link from "next/link";
+import { BrandMark } from "@/components/brand-mark";
+import { StickerStudio } from "@/components/sticker-studio";
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <>
+      <header className="site-header">
+        <Link href="/"><BrandMark /></Link>
+        <nav><a href="#how">How it works</a><a href="#studio">Create yours</a></nav>
+        <a className="nav-cta" href="#studio">Make a sticker <Sparkles size={15} /></a>
+      </header>
+      <main>
+        <section className="hero">
+          <div className="hero-sticker sticker-one">GOOD<br />IDEAS<br /><span>STICK</span></div>
+          <div className="hero-sticker sticker-two">✦</div>
+          <div className="hero-copy">
+            <p className="eyebrow"><span /> From thought to sticker in minutes</p>
+            <h1>Your weird little idea<br />belongs on a <em>sticker.</em></h1>
+            <p className="hero-sub">Describe anything. We turn it into original, print-ready art and ship the real stickers to your door.</p>
+            <div className="hero-actions"><a href="#studio" className="primary-link">Create a sticker <Sparkles size={18} /></a><a href="#how">See how it works <ArrowDown size={17} /></a></div>
+            <div className="trust-row"><span><ShieldCheck /> Secure payment</span><span><PackageCheck /> Quality print</span><span><Truck /> Shipped to you</span></div>
+          </div>
+        </section>
+        <StickerStudio />
+        <section className="how-section" id="how">
+          <p className="eyebrow">Simple by design</p><h2>One idea. Three steps. Zero inventory.</h2>
+          <div className="how-grid">
+            <article><span>1</span><Sparkles /><h3>Describe it</h3><p>Tell us the character, phrase, mood, colors—whatever is in your head.</p></article>
+            <article><span>2</span><ShieldCheck /><h3>Approve it</h3><p>Choose your favorite result and a pack size. Regenerate anytime before paying.</p></article>
+            <article><span>3</span><Truck /><h3>We ship it</h3><p>Stripe confirms payment, Printify prints it, and tracking follows automatically.</p></article>
+          </div>
+        </section>
       </main>
-    </div>
+      <footer><BrandMark /><p>Make something worth sticking around.</p><div><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div></footer>
+    </>
   );
 }
