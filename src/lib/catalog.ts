@@ -8,9 +8,9 @@ export const stickerStyles = [
 export const stickerShapes = ["Die-cut", "Circle", "Rounded square"] as const;
 
 export const packs = [
-  { id: "five", label: "5 stickers", quantity: 5, priceCents: 1400 },
-  { id: "ten", label: "10 stickers", quantity: 10, priceCents: 2200, featured: true },
-  { id: "twenty_five", label: "25 stickers", quantity: 25, priceCents: 3900 },
+  { id: "one", label: "1 sticker", quantity: 1, priceCents: 1500 },
+  { id: "three", label: "3 stickers", quantity: 3, priceCents: 2900, featured: true },
+  { id: "five", label: "5 stickers", quantity: 5, priceCents: 4200 },
 ] as const;
 
 export type PackId = (typeof packs)[number]["id"];

@@ -34,7 +34,7 @@ export function StickerStudio() {
   const [prompt, setPrompt] = useState(ideas[0]);
   const [style, setStyle] = useState("bold");
   const [shape, setShape] = useState("Die-cut");
-  const [packId, setPackId] = useState("ten");
+  const [packId, setPackId] = useState("three");
   const [subjectCount, setSubjectCount] = useState<1 | 2>(1);
   const [referenceMode, setReferenceMode] = useState<"inspire" | "preserve">("inspire");
   const [references, setReferences] = useState<ReferenceFile[]>([]);
