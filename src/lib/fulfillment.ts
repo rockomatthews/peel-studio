@@ -68,6 +68,8 @@ export async function fulfillCheckout(sessionId: string) {
         externalId: session.id,
         imageUrl: design.image_url,
         quantity: order.quantity,
+        variantId: design.variant_id,
+        printArea: design.print_area,
         address: {
           first_name: firstName,
           last_name: lastName,

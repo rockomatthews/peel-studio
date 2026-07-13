@@ -5,12 +5,13 @@ An autonomous custom-sticker storefront built with Next.js, OpenAI image generat
 ## Customer flow
 
 1. A customer describes a sticker and chooses an art direction.
-2. OpenAI generates transparent, print-ready PNG artwork.
-3. The PNG is saved to Vercel Blob and the design record is saved to Postgres.
-4. Stripe Checkout collects payment, name, phone, email, and shipping address.
-5. A signed Stripe webhook submits the paid order to Printify.
-6. Printify creates the custom product during order submission, then optionally sends it directly to production.
-7. Printify webhooks update production, shipment, tracking, and delivery status.
+2. OpenAI generates artwork within explicit subject, wording, and composition limits. Customers may supply up to three reference images.
+3. The server isolates the artwork, fits it inside the selected Printify variant's exact placeholder dimensions and safe margin, and exports a transparent PNG.
+4. The PNG is saved to Vercel Blob and the selected variant/canvas is frozen in Postgres.
+5. Stripe Checkout collects payment, name, phone, email, and shipping address.
+6. A signed Stripe webhook submits the paid order to Printify.
+7. Printify creates the custom product during order submission, then optionally sends it directly to production.
+8. Printify webhooks update production, shipment, tracking, and delivery status.
 
 Webhook fulfillment is idempotent: the Stripe Checkout Session ID is unique locally and is also used as Printify's external order ID. Failed Stripe webhook responses return `500`, so Stripe retries the fulfillment automatically.
 
@@ -34,11 +35,13 @@ Create a Vercel project for this repo. Add:
 - a Vercel Blob store, which provides `BLOB_READ_WRITE_TOKEN`
 - Neon from the Vercel Marketplace, which provides `DATABASE_URL`
 
-Run [`db/001_init.sql`](db/001_init.sql) against the Neon database once.
+Run [`db/001_init.sql`](db/001_init.sql) against a new Neon database. If the original schema was already installed, run [`db/002_print_constraints.sql`](db/002_print_constraints.sql) instead.
 
 ### 2. OpenAI
 
-Add `OPENAI_API_KEY`. `OPENAI_IMAGE_MODEL` defaults to `gpt-image-1.5`, which supports transparent PNG output. The OpenAI client is initialized only at request time, so builds remain safe before the key is connected.
+Add `OPENAI_API_KEY`. The app defaults to `gpt-image-2`, OpenAI's current highest-quality image model. Because that model does not currently emit transparent backgrounds, the app asks for a uniform neutral background, removes only edge-connected background pixels, then trims, scales, pads, and exports an exact-size transparent PNG. `gpt-image-1.5` remains compatible if native transparency is preferred.
+
+Reference images are uploaded directly to Vercel Blob, fetched server-side for the OpenAI edit request, and deleted after the generation attempt. Accepted formats are PNG, JPG, and WebP; the limit is three files at 8 MB each.
 
 ### 3. Stripe
 
@@ -70,7 +73,25 @@ Create an API-connected shop and a personal access token with these scopes:
 - `orders.read`
 - `orders.write`
 
-Choose a sticker blueprint, print provider, and variant from the Printify catalog. Put those numeric IDs into `PRINTIFY_BLUEPRINT_ID`, `PRINTIFY_PRINT_PROVIDER_ID`, and `PRINTIFY_VARIANT_ID`. The selected variant must support the placeholder in `PRINTIFY_PRINT_AREA` (usually `front`).
+Choose a sticker blueprint, print provider, and one or more variants from the Printify catalog. Put those numeric IDs into `PRINTIFY_BLUEPRINT_ID`, `PRINTIFY_PRINT_PROVIDER_ID`, and `PRINTIFY_VARIANT_IDS`. Start with one variant until its cost and shipping have been sample-tested. The selected variants must expose the placeholder in `PRINTIFY_PRINT_AREA` (usually `front`).
+
+### How the Printify environment variables work
+
+| Variable | What it controls |
+| --- | --- |
+| `PRINTIFY_API_TOKEN` | Secret personal access token used as the server-side Bearer credential. Create it with `shops.read`, `catalog.read`, `orders.read`, and `orders.write`; add webhook scopes if subscriptions will be created through the API. Printify personal access tokens currently expire after one year. |
+| `PRINTIFY_SHOP_ID` | The numeric API-connected store that receives each paid order. Get it from `GET /v1/shops.json`. It is not the public shop name. |
+| `PRINTIFY_BLUEPRINT_ID` | The base catalog product, such as a particular sticker product. A blueprint defines compatible providers and product options. |
+| `PRINTIFY_PRINT_PROVIDER_ID` | The company that prints and ships that blueprint. It determines variants, costs, availability, shipping coverage, and printable placeholders. |
+| `PRINTIFY_VARIANT_IDS` | Comma-separated allowed SKUs for that blueprint/provider combination. A variant is a concrete option combination such as size, material, or finish. The UI only exposes IDs in this allow-list. |
+| `PRINTIFY_PRINT_AREA` | Placeholder position to use, commonly `front`. The app matches this against the selected variant and reads that placeholder's exact `width` and `height`. |
+| `PRINTIFY_DECORATION_METHOD` | Optional placeholder filter when a product exposes multiple printing methods at the same position. Leave blank unless the catalog response requires disambiguation. |
+| `PRINTIFY_SHIPPING_METHOD` | Shipping tier sent with the order: `1` standard, `2` priority, or `3` Printify Express where supported. Begin with `1`; available methods still depend on the provider/product/destination. |
+| `PRINTIFY_AUTO_SEND_TO_PRODUCTION` | `false` creates the Printify order but leaves production manual. `true` immediately sends a paid order to production and can create real Printify charges. |
+| `PRINTIFY_WEBHOOK_SECRET` | A random secret you choose and append to the webhook callback URL. This app checks it before accepting Printify status updates. It is not the API token. |
+| `PRINT_SAFE_MARGIN` | Internal artwork padding as a fraction of the canvas. The default `0.08` protects 8% on each edge before uploading the exact-size PNG. |
+
+The route `/api/print-options` fetches the configured catalog variants and returns only the allow-listed choices. Generation cannot begin without one of those IDs. The backend then uses the selected placeholder dimensions—not a guessed inch-to-pixel conversion—for prompt composition and final Sharp processing. Variant ID, canvas size, print position, and decoration method are stored with the design, so fulfillment uses the same immutable selection after payment.
 
 Useful API checks:
 
@@ -100,6 +121,7 @@ Leave `PRINTIFY_AUTO_SEND_TO_PRODUCTION=false` for test orders. When the selecte
 
 - Replace the starter privacy policy and terms with business-specific, legally reviewed documents.
 - Confirm the selected Printify variant's print area, resolution, product cost, shipping cost, and supported countries.
+- If more than one variant is exposed, confirm that the current pack prices remain profitable for every variant; pack pricing is presently shared across sizes.
 - Reprice the packs in `src/lib/catalog.ts` after calculating OpenAI, Stripe, Printify, shipping, replacement, and tax costs.
 - Configure Stripe tax behavior for the jurisdictions where the business has obligations.
 - Run at least one end-to-end Stripe test-mode order and one controlled Printify sample order.

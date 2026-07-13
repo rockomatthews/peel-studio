@@ -20,10 +20,12 @@ export function paidFlowReadiness() {
     "PRINTIFY_SHOP_ID",
     "PRINTIFY_BLUEPRINT_ID",
     "PRINTIFY_PRINT_PROVIDER_ID",
-    "PRINTIFY_VARIANT_ID",
   ] as const;
 
-  const missing = required.filter((name) => !process.env[name]);
+  const missing: string[] = required.filter((name) => !process.env[name]);
+  if (!process.env.PRINTIFY_VARIANT_IDS && !process.env.PRINTIFY_VARIANT_ID) {
+    missing.push("PRINTIFY_VARIANT_IDS");
+  }
   return { ready: missing.length === 0, missing };
 }
 

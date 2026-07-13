@@ -8,6 +8,13 @@ CREATE TABLE IF NOT EXISTS designs (
   shape text NOT NULL,
   image_url text NOT NULL,
   status text NOT NULL DEFAULT 'ready',
+  variant_id integer NOT NULL,
+  print_canvas_width integer NOT NULL,
+  print_canvas_height integer NOT NULL,
+  print_area text NOT NULL,
+  decoration_method text NOT NULL,
+  subject_count integer NOT NULL CHECK (subject_count IN (1, 2)),
+  reference_urls jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

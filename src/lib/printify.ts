@@ -15,7 +15,7 @@ type PrintifyAddress = {
   zip: string;
 };
 
-async function printifyRequest<T>(path: string, init: RequestInit) {
+export async function printifyRequest<T>(path: string, init: RequestInit = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
@@ -38,6 +38,8 @@ export async function submitPrintifyOrder(input: {
   externalId: string;
   imageUrl: string;
   quantity: number;
+  variantId: number;
+  printArea: string;
   address: PrintifyAddress;
 }) {
   const shopId = requireEnv("PRINTIFY_SHOP_ID");
@@ -50,9 +52,9 @@ export async function submitPrintifyOrder(input: {
         {
           print_provider_id: Number(requireEnv("PRINTIFY_PRINT_PROVIDER_ID")),
           blueprint_id: Number(requireEnv("PRINTIFY_BLUEPRINT_ID")),
-          variant_id: Number(requireEnv("PRINTIFY_VARIANT_ID")),
+          variant_id: input.variantId,
           print_areas: {
-            [process.env.PRINTIFY_PRINT_AREA || "front"]: input.imageUrl,
+            [input.printArea]: input.imageUrl,
           },
           quantity: input.quantity,
           external_id: `${input.externalId}-art`,

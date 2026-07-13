@@ -19,6 +19,13 @@ export type DesignRecord = {
   shape: string;
   image_url: string;
   status: string;
+  variant_id: number;
+  print_canvas_width: number;
+  print_canvas_height: number;
+  print_area: string;
+  decoration_method: string;
+  subject_count: number;
+  reference_urls: string[];
 };
 
 export type OrderRecord = {
@@ -37,8 +44,17 @@ export type OrderRecord = {
 export async function saveDesign(input: Omit<DesignRecord, "status">) {
   const sql = getSql();
   const rows = await sql`
-    INSERT INTO designs (id, prompt, art_prompt, style, shape, image_url, status)
-    VALUES (${input.id}, ${input.prompt}, ${input.art_prompt}, ${input.style}, ${input.shape}, ${input.image_url}, 'ready')
+    INSERT INTO designs (
+      id, prompt, art_prompt, style, shape, image_url, status,
+      variant_id, print_canvas_width, print_canvas_height, print_area, decoration_method,
+      subject_count, reference_urls
+    )
+    VALUES (
+      ${input.id}, ${input.prompt}, ${input.art_prompt}, ${input.style}, ${input.shape}, ${input.image_url}, 'ready',
+      ${input.variant_id}, ${input.print_canvas_width}, ${input.print_canvas_height},
+      ${input.print_area}, ${input.decoration_method},
+      ${input.subject_count}, ${JSON.stringify(input.reference_urls)}::jsonb
+    )
     RETURNING id
   `;
   return rows[0] as { id: string };
