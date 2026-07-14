@@ -1,10 +1,17 @@
-import { Sparkles } from "lucide-react";
+import Image from "next/image";
 
-export function BrandMark() {
+export function BrandMark({ preload = false }: { preload?: boolean }) {
   return (
-    <div className="brand-mark" aria-label="Peel Studio">
-      <span className="brand-icon"><Sparkles size={18} strokeWidth={2.4} /></span>
-      <span>peel</span>
-    </div>
+    <span className="brand-mark">
+      <Image
+        className="brand-logo"
+        src="/peel-this-logo.png"
+        alt="PeelThis"
+        width={1569}
+        height={350}
+        sizes="(max-width: 600px) 150px, 190px"
+        preload={preload}
+      />
+    </span>
   );
 }

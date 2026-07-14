@@ -7,7 +7,7 @@ export default function Home() {
   return (
     <>
       <header className="site-header">
-        <Link href="/"><BrandMark /></Link>
+        <Link href="/" aria-label="PeelThis home"><BrandMark preload /></Link>
         <nav><a href="#how">How it works</a><a href="#studio">Create yours</a></nav>
         <a className="nav-cta" href="#studio">Make a sticker <Sparkles size={15} /></a>
       </header>
