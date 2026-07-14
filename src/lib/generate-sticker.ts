@@ -8,6 +8,7 @@ import { paidFlowReadiness } from "@/lib/runtime";
 import type { GenerateInput } from "@/lib/schemas";
 
 let openaiClient: OpenAI | null = null;
+let blobReadinessPromise: Promise<void> | null = null;
 
 function getOpenAI() {
   if (!openaiClient) openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -23,6 +24,7 @@ export class GenerationPipelineError extends Error {
   public readonly providerCode?: string;
   public readonly providerType?: string;
   public readonly providerParam?: string;
+  public readonly safeDetail?: string;
 
   constructor(
     public readonly stage: GenerationStage,
@@ -35,6 +37,8 @@ export class GenerationPipelineError extends Error {
       this.providerCode = cause.code ?? undefined;
       this.providerType = cause.type;
       this.providerParam = cause.param ?? undefined;
+    } else if (cause instanceof Error && stage === "blob_storage") {
+      this.safeDetail = cause.message.replace(/Bearer\s+\S+/gi, "Bearer [redacted]").slice(0, 300);
     }
   }
 }
@@ -46,6 +50,27 @@ async function atStage<T>(stage: GenerationStage, operation: () => Promise<T>) {
     if (error instanceof GenerationPipelineError) throw error;
     throw new GenerationPipelineError(stage, error);
   }
+}
+
+function ensurePublicBlobStorage() {
+  if (blobReadinessPromise) return blobReadinessPromise;
+  blobReadinessPromise = (async () => {
+    const pathname = `health/${randomUUID()}.png`;
+    const pixel = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X0Y5WQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const blob = await put(pathname, pixel, {
+      access: "public",
+      contentType: "image/png",
+      addRandomSuffix: false,
+    });
+    await del(blob.url).catch((error) => console.error("Blob readiness cleanup failed", error));
+  })().catch((error) => {
+    blobReadinessPromise = null;
+    throw error;
+  });
+  return blobReadinessPromise;
 }
 
 function safeReferenceUrl(value: string) {
@@ -137,6 +162,7 @@ export async function generateSticker(input: GenerateInput) {
     if (canPersist) {
       // Validate and initialize persistence before incurring an image-generation charge.
       await atStage("database", ensureDatabaseSchema);
+      await atStage("blob_storage", ensurePublicBlobStorage);
     }
     const references = input.referenceImageUrls.length
       ? await atStage("reference_upload", () => loadReferences(input.referenceImageUrls))

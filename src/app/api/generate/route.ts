@@ -46,6 +46,9 @@ export async function POST(request: Request) {
                 providerParam: error.providerParam,
               }
             : {}),
+          ...(error.stage === "blob_storage" && error.safeDetail
+            ? { storageError: error.safeDetail }
+            : {}),
         },
         { status: 500 },
       );
