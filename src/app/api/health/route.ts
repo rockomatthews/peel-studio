@@ -1,6 +1,5 @@
 import { paidFlowReadiness } from "@/lib/runtime";
 import { getSql } from "@/lib/db";
-import { ensurePublicBlobStorage } from "@/lib/generate-sticker";
 
 export const dynamic = "force-dynamic";
 
@@ -47,23 +46,4 @@ export async function GET() {
     { status: ready ? "ready" : "setup_required", missing: readiness.missing, database },
     { headers: { "Cache-Control": "no-store" } },
   );
-}
-
-export async function POST() {
-  try {
-    await ensurePublicBlobStorage();
-    return Response.json(
-      { blob: { ready: true, access: "public" } },
-      { headers: { "Cache-Control": "no-store" } },
-    );
-  } catch (error) {
-    console.error("Blob health check failed", error);
-    const message = error instanceof Error
-      ? error.message.replace(/Bearer\s+\S+/gi, "Bearer [redacted]").slice(0, 300)
-      : "Unknown Blob storage error";
-    return Response.json(
-      { blob: { ready: false, access: "public", error: message } },
-      { status: 503, headers: { "Cache-Control": "no-store" } },
-    );
-  }
 }
