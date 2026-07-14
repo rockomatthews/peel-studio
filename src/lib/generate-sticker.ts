@@ -52,7 +52,7 @@ async function atStage<T>(stage: GenerationStage, operation: () => Promise<T>) {
   }
 }
 
-function ensurePublicBlobStorage() {
+export function ensurePublicBlobStorage() {
   if (blobReadinessPromise) return blobReadinessPromise;
   blobReadinessPromise = (async () => {
     const pathname = `health/${randomUUID()}.png`;
