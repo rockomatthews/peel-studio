@@ -38,6 +38,14 @@ export async function POST(request: Request) {
         {
           error: `Sticker generation failed during ${labels[error.stage]}. No substitute artwork was used.`,
           stage: error.stage,
+          ...(error.stage === "openai"
+            ? {
+                providerStatus: error.providerStatus,
+                providerCode: error.providerCode,
+                providerType: error.providerType,
+                providerParam: error.providerParam,
+              }
+            : {}),
         },
         { status: 500 },
       );

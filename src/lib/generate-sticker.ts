@@ -19,12 +19,23 @@ export class GenerationConfigurationError extends Error {}
 export type GenerationStage = "reference_upload" | "openai" | "artwork_processing" | "blob_storage" | "database";
 
 export class GenerationPipelineError extends Error {
+  public readonly providerStatus?: number;
+  public readonly providerCode?: string;
+  public readonly providerType?: string;
+  public readonly providerParam?: string;
+
   constructor(
     public readonly stage: GenerationStage,
     cause: unknown,
   ) {
     super(`Sticker generation failed during ${stage}`, { cause });
     this.name = "GenerationPipelineError";
+    if (cause instanceof OpenAI.APIError) {
+      this.providerStatus = cause.status;
+      this.providerCode = cause.code ?? undefined;
+      this.providerType = cause.type;
+      this.providerParam = cause.param ?? undefined;
+    }
   }
 }
 
