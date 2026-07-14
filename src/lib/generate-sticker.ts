@@ -98,12 +98,24 @@ export function buildArtPrompt(
   ].join(" ");
 }
 
+function moderationSafeArtPrompt(artPrompt: string) {
+  const rewritten = artPrompt.replace(
+    /\b(?:a|an)\s+looney\s+tunes(?:[-\s]+like)?\b/gi,
+    "an original exaggerated golden-age slapstick cartoon",
+  );
+  return [
+    rewritten,
+    "Create a wholly original character with no franchise character, protected logo, team mark, or copied franchise identifier.",
+    "Any broken item is inanimate sports equipment only; show no injury, blood, or violence toward a person.",
+  ].join(" ");
+}
+
 export async function generateSticker(input: GenerateInput) {
   const id = randomUUID();
   const printOption = await getPrintOption(input.variantId);
   const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
   const opaqueBackground = model.startsWith("gpt-image-2");
-  const artPrompt = buildArtPrompt(input, printOption, opaqueBackground);
+  let artPrompt = buildArtPrompt(input, printOption, opaqueBackground);
   if (!process.env.OPENAI_API_KEY) {
     throw new GenerationConfigurationError(
       "OpenAI image generation is not configured. Add OPENAI_API_KEY to Vercel and redeploy.",
@@ -129,15 +141,30 @@ export async function generateSticker(input: GenerateInput) {
     const references = input.referenceImageUrls.length
       ? await atStage("reference_upload", () => loadReferences(input.referenceImageUrls))
       : [];
-    const result = await atStage("openai", () =>
+    const createImage = (activeRequest: typeof request) =>
       input.referenceImageUrls.length
         ? getOpenAI().images.edit({
-            ...request,
+            ...activeRequest,
             image: references,
             ...(opaqueBackground ? {} : { input_fidelity: "high" as const }),
           })
-        : getOpenAI().images.generate(request),
-    );
+        : getOpenAI().images.generate(activeRequest);
+
+    let result;
+    try {
+      result = await atStage("openai", () => createImage(request));
+    } catch (error) {
+      if (
+        error instanceof GenerationPipelineError &&
+        error.stage === "openai" &&
+        error.providerCode === "moderation_blocked"
+      ) {
+        artPrompt = moderationSafeArtPrompt(artPrompt);
+        result = await atStage("openai", () => createImage({ ...request, prompt: artPrompt }));
+      } else {
+        throw error;
+      }
+    }
 
     const base64 = result.data?.[0]?.b64_json;
     if (!base64) throw new Error("OpenAI did not return image data");
