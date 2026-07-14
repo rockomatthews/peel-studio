@@ -16,6 +16,27 @@ function getOpenAI() {
 
 export class GenerationConfigurationError extends Error {}
 
+export type GenerationStage = "reference_upload" | "openai" | "artwork_processing" | "blob_storage" | "database";
+
+export class GenerationPipelineError extends Error {
+  constructor(
+    public readonly stage: GenerationStage,
+    cause: unknown,
+  ) {
+    super(`Sticker generation failed during ${stage}`, { cause });
+    this.name = "GenerationPipelineError";
+  }
+}
+
+async function atStage<T>(stage: GenerationStage, operation: () => Promise<T>) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof GenerationPipelineError) throw error;
+    throw new GenerationPipelineError(stage, error);
+  }
+}
+
 function safeReferenceUrl(value: string) {
   const url = new URL(value);
   if (
@@ -89,20 +110,27 @@ export async function generateSticker(input: GenerateInput) {
   };
 
   try {
-    const result = input.referenceImageUrls.length
-      ? await getOpenAI().images.edit({
-          ...request,
-          image: await loadReferences(input.referenceImageUrls),
-          ...(opaqueBackground ? {} : { input_fidelity: "high" as const }),
-        })
-      : await getOpenAI().images.generate(request);
+    const references = input.referenceImageUrls.length
+      ? await atStage("reference_upload", () => loadReferences(input.referenceImageUrls))
+      : [];
+    const result = await atStage("openai", () =>
+      input.referenceImageUrls.length
+        ? getOpenAI().images.edit({
+            ...request,
+            image: references,
+            ...(opaqueBackground ? {} : { input_fidelity: "high" as const }),
+          })
+        : getOpenAI().images.generate(request),
+    );
 
     const base64 = result.data?.[0]?.b64_json;
     if (!base64) throw new Error("OpenAI did not return image data");
-    const artwork = await prepareArtwork(
-      Buffer.from(base64, "base64"),
-      printOption,
-      opaqueBackground,
+    const artwork = await atStage("artwork_processing", () =>
+      prepareArtwork(
+        Buffer.from(base64, "base64"),
+        printOption,
+        opaqueBackground,
+      ),
     );
     const canPersist = Boolean(process.env.BLOB_READ_WRITE_TOKEN && process.env.DATABASE_URL);
     if (!canPersist) {
@@ -116,27 +144,31 @@ export async function generateSticker(input: GenerateInput) {
       };
     }
 
-    const blob = await put(`designs/${id}.png`, artwork, {
-      access: "public",
-      contentType: "image/png",
-      addRandomSuffix: false,
-    });
+    const blob = await atStage("blob_storage", () =>
+      put(`designs/${id}.png`, artwork, {
+        access: "public",
+        contentType: "image/png",
+        addRandomSuffix: false,
+      }),
+    );
 
-    await saveDesign({
-      id,
-      prompt: input.prompt,
-      art_prompt: artPrompt,
-      style: "prompt_only",
-      shape: "die_cut",
-      image_url: blob.url,
-      variant_id: printOption.variantId,
-      print_canvas_width: printOption.width,
-      print_canvas_height: printOption.height,
-      print_area: printOption.position,
-      decoration_method: printOption.decorationMethod,
-      subject_count: 1,
-      reference_urls: input.referenceImageUrls,
-    });
+    await atStage("database", () =>
+      saveDesign({
+        id,
+        prompt: input.prompt,
+        art_prompt: artPrompt,
+        style: "prompt_only",
+        shape: "die_cut",
+        image_url: blob.url,
+        variant_id: printOption.variantId,
+        print_canvas_width: printOption.width,
+        print_canvas_height: printOption.height,
+        print_area: printOption.position,
+        decoration_method: printOption.decorationMethod,
+        subject_count: 1,
+        reference_urls: input.referenceImageUrls,
+      }),
+    );
 
     const readiness = paidFlowReadiness();
     return {

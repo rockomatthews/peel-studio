@@ -1,4 +1,8 @@
-import { generateSticker, GenerationConfigurationError } from "@/lib/generate-sticker";
+import {
+  generateSticker,
+  GenerationConfigurationError,
+  GenerationPipelineError,
+} from "@/lib/generate-sticker";
 import { generateSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
@@ -21,6 +25,22 @@ export async function POST(request: Request) {
     console.error("Sticker generation failed", error);
     if (error instanceof GenerationConfigurationError) {
       return Response.json({ error: error.message }, { status: 503 });
+    }
+    if (error instanceof GenerationPipelineError) {
+      const labels = {
+        reference_upload: "loading the reference image",
+        openai: "OpenAI image creation",
+        artwork_processing: "preparing the print-ready artwork",
+        blob_storage: "saving the artwork",
+        database: "saving the design record",
+      } as const;
+      return Response.json(
+        {
+          error: `Sticker generation failed during ${labels[error.stage]}. No substitute artwork was used.`,
+          stage: error.stage,
+        },
+        { status: 500 },
+      );
     }
     return Response.json(
       { error: "OpenAI could not create this sticker. No substitute artwork was used; please try again." },
