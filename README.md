@@ -35,7 +35,7 @@ Create a Vercel project for this repo. Add:
 - a Vercel Blob store, which provides `BLOB_READ_WRITE_TOKEN`
 - Neon from the Vercel Marketplace, which provides `DATABASE_URL`
 
-Run [`db/001_init.sql`](db/001_init.sql) against a new Neon database. If the original schema was already installed, run [`db/002_print_constraints.sql`](db/002_print_constraints.sql) instead.
+The production server creates the required Neon tables automatically before the first paid image generation. The SQL files in [`db`](db) remain available for manual recovery or inspection; use [`db/001_init.sql`](db/001_init.sql) for a new database and [`db/002_print_constraints.sql`](db/002_print_constraints.sql) only for an older installation.
 
 ### 2. OpenAI
 

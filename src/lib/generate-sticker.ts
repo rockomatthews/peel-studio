@@ -1,7 +1,7 @@
 import { del, put } from "@vercel/blob";
 import OpenAI, { toFile } from "openai";
 import { randomUUID } from "node:crypto";
-import { saveDesign } from "@/lib/db";
+import { ensureDatabaseSchema, saveDesign } from "@/lib/db";
 import { generationSizeFor, prepareArtwork } from "@/lib/prepare-artwork";
 import { getPrintOption } from "@/lib/print-options";
 import { paidFlowReadiness } from "@/lib/runtime";
@@ -110,6 +110,11 @@ export async function generateSticker(input: GenerateInput) {
   };
 
   try {
+    const canPersist = Boolean(process.env.BLOB_READ_WRITE_TOKEN && process.env.DATABASE_URL);
+    if (canPersist) {
+      // Validate and initialize persistence before incurring an image-generation charge.
+      await atStage("database", ensureDatabaseSchema);
+    }
     const references = input.referenceImageUrls.length
       ? await atStage("reference_upload", () => loadReferences(input.referenceImageUrls))
       : [];
@@ -132,7 +137,6 @@ export async function generateSticker(input: GenerateInput) {
         opaqueBackground,
       ),
     );
-    const canPersist = Boolean(process.env.BLOB_READ_WRITE_TOKEN && process.env.DATABASE_URL);
     if (!canPersist) {
       return {
         id,

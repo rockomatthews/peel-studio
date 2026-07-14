@@ -1,6 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
 let sqlClient: NeonQueryFunction<false, false> | null = null;
+let schemaPromise: Promise<void> | null = null;
 
 export function getSql() {
   if (!sqlClient) {
@@ -9,6 +10,58 @@ export function getSql() {
     sqlClient = neon(url);
   }
   return sqlClient;
+}
+
+export function ensureDatabaseSchema() {
+  if (schemaPromise) return schemaPromise;
+  schemaPromise = (async () => {
+    const sql = getSql();
+    await sql`
+      CREATE TABLE IF NOT EXISTS designs (
+        id uuid PRIMARY KEY,
+        prompt text NOT NULL,
+        art_prompt text NOT NULL,
+        style text NOT NULL,
+        shape text NOT NULL,
+        image_url text NOT NULL,
+        status text NOT NULL DEFAULT 'ready',
+        variant_id integer NOT NULL,
+        print_canvas_width integer NOT NULL,
+        print_canvas_height integer NOT NULL,
+        print_area text NOT NULL,
+        decoration_method text NOT NULL,
+        subject_count integer NOT NULL CHECK (subject_count IN (1, 2)),
+        reference_urls jsonb NOT NULL DEFAULT '[]'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS orders (
+        id uuid PRIMARY KEY,
+        design_id uuid NOT NULL REFERENCES designs(id),
+        stripe_session_id text NOT NULL UNIQUE,
+        pack_id text NOT NULL,
+        quantity integer NOT NULL CHECK (quantity > 0),
+        amount_cents integer NOT NULL CHECK (amount_cents > 0),
+        status text NOT NULL DEFAULT 'checkout_created',
+        customer_email text,
+        shipping_name text,
+        shipping_address jsonb,
+        printify_order_id text UNIQUE,
+        tracking_url text,
+        fulfillment_error text,
+        fulfillment_attempted_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS orders_status_idx ON orders(status)`;
+    await sql`CREATE INDEX IF NOT EXISTS orders_design_id_idx ON orders(design_id)`;
+  })().catch((error) => {
+    schemaPromise = null;
+    throw error;
+  });
+  return schemaPromise;
 }
 
 export type DesignRecord = {
