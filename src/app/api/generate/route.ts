@@ -1,8 +1,8 @@
-import { generateSticker } from "@/lib/generate-sticker";
+import { generateSticker, GenerationConfigurationError } from "@/lib/generate-sticker";
 import { generateSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
@@ -19,8 +19,11 @@ export async function POST(request: Request) {
     return Response.json(design);
   } catch (error) {
     console.error("Sticker generation failed", error);
+    if (error instanceof GenerationConfigurationError) {
+      return Response.json({ error: error.message }, { status: 503 });
+    }
     return Response.json(
-      { error: "We could not create that sticker. Try a different prompt." },
+      { error: "OpenAI could not create this sticker. No substitute artwork was used; please try again." },
       { status: 500 },
     );
   }

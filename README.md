@@ -5,7 +5,7 @@ An autonomous custom-sticker storefront built with Next.js, OpenAI image generat
 ## Customer flow
 
 1. A customer describes a sticker and chooses an art direction.
-2. OpenAI generates artwork within explicit subject, wording, and composition limits. Customers may supply up to three reference images.
+2. OpenAI follows the customer's prompt directly. Customers may supply up to three authoritative reference images; there are no injected style or “vibe” controls.
 3. The server isolates the artwork, fits it inside the selected Printify variant's exact placeholder dimensions and safe margin, and exports a transparent PNG.
 4. The PNG is saved to Vercel Blob and the selected variant/canvas is frozen in Postgres.
 5. Stripe Checkout collects payment, name, phone, email, and shipping address.
@@ -15,14 +15,14 @@ An autonomous custom-sticker storefront built with Next.js, OpenAI image generat
 
 Webhook fulfillment is idempotent: the Stripe Checkout Session ID is unique locally and is also used as Printify's external order ID. Failed Stripe webhook responses return `500`, so Stripe retries the fulfillment automatically.
 
-## Run locally in preview mode
+## Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. With no service credentials, the full interface runs in preview mode with sample artwork and checkout disabled.
+Open `http://localhost:3000`. The interface loads without credentials, but generation returns an explicit configuration error until `OPENAI_API_KEY` is present. It never substitutes canned sample art for a customer's prompt. With OpenAI configured but Blob or Postgres still missing, it returns the real generated artwork with checkout disabled.
 
 ## Production setup
 

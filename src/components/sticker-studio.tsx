@@ -2,9 +2,9 @@
 
 import { upload } from "@vercel/blob/client";
 import Image from "next/image";
-import { ArrowRight, Check, ImagePlus, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
+import { ArrowRight, ImagePlus, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
 import { ChangeEvent, useEffect, useState } from "react";
-import { formatMoney, packs, stickerShapes, stickerStyles } from "@/lib/catalog";
+import { formatMoney, packs } from "@/lib/catalog";
 
 type PrintOption = {
   variantId: number;
@@ -17,26 +17,16 @@ type PrintOption = {
 type GeneratedDesign = {
   id: string;
   imageUrl: string;
-  demo: boolean;
   purchasable: boolean;
+  notice?: string;
   printOption: PrintOption;
 };
 
 type ReferenceFile = { id: string; file: File; preview: string };
 
-const ideas = [
-  "A sleepy cowboy moon drinking tiny coffee",
-  "A fast little tomato with racing goggles",
-  "Desert mountains shaped like a friendly cat",
-];
-
 export function StickerStudio() {
-  const [prompt, setPrompt] = useState(ideas[0]);
-  const [style, setStyle] = useState("bold");
-  const [shape, setShape] = useState("Die-cut");
+  const [prompt, setPrompt] = useState("");
   const [packId, setPackId] = useState("three");
-  const [subjectCount, setSubjectCount] = useState<1 | 2>(1);
-  const [referenceMode, setReferenceMode] = useState<"inspire" | "preserve">("inspire");
   const [references, setReferences] = useState<ReferenceFile[]>([]);
   const [printOptions, setPrintOptions] = useState<PrintOption[]>([]);
   const [variantId, setVariantId] = useState<number | null>(null);
@@ -95,7 +85,7 @@ export function StickerStudio() {
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, style, shape, subjectCount, variantId, referenceMode, referenceImageUrls }),
+        body: JSON.stringify({ prompt, variantId, referenceImageUrls }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Generation failed");
@@ -142,55 +132,21 @@ export function StickerStudio() {
             <textarea id="prompt" value={prompt} maxLength={800} onChange={(event) => setPrompt(event.target.value)} placeholder="A roller-skating raccoon holding a slice of pizza..." />
             <span>{prompt.length}/800</span>
           </div>
-          <div className="idea-row">
-            <span>Try an idea:</span>
-            {ideas.slice(1).map((idea, index) => <button key={idea} type="button" onClick={() => setPrompt(idea)}>{index === 0 ? "Racing tomato" : "Desert cat"}</button>)}
-          </div>
+          <div className="limits-note"><strong>Your instructions are authoritative</strong><span>The artwork comes only from your description and any images you upload. Include every visual detail that must be preserved.</span></div>
 
-          <div className="limits-note"><strong>Print-friendly limits</strong><span>1–2 focal subjects · up to 4 words · no full scenes · details stay inside the safe zone</span></div>
-          <div className="constraint-grid">
-            <div>
-              <label>Focal subjects</label>
-              <div className="segmented-control">
-                {([1, 2] as const).map((count) => <button type="button" className={subjectCount === count ? "selected" : ""} key={count} onClick={() => setSubjectCount(count)}>{count} {count === 1 ? "subject" : "subjects"}</button>)}
-              </div>
-            </div>
-            <div>
-              <label>Artwork silhouette</label>
-              <div className="segmented-control">
-                {stickerShapes.map((option) => <button type="button" className={shape === option ? "selected" : ""} key={option} onClick={() => setShape(option)}>{option}</button>)}
-              </div>
-            </div>
-          </div>
-
-          <div className="step-row section-step"><span>02</span><p>Pick a vibe</p></div>
-          <div className="style-grid">
-            {stickerStyles.map((option) => (
-              <button type="button" className={style === option.id ? "style-option selected" : "style-option"} key={option.id} onClick={() => setStyle(option.id)}>
-                <span className={`style-swatch swatch-${option.id}`} />
-                <span><strong>{option.label}</strong><small>{option.hint}</small></span>
-                {style === option.id && <Check className="option-check" size={16} />}
-              </button>
-            ))}
-          </div>
-
-          <div className="step-row section-step"><span>03</span><p>Add references <small>optional · max 3</small></p></div>
+          <div className="step-row section-step"><span>02</span><p>Add references <small>optional · max 3</small></p></div>
           <label className="reference-upload">
             <ImagePlus size={20} />
-            <span><strong>Upload PNG, JPG, or WebP</strong><small>Characters, sketches, colors, or style references · 8 MB each</small></span>
+            <span><strong>Upload PNG, JPG, or WebP</strong><small>Treated as authoritative visual references · 8 MB each</small></span>
             <input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={addReferences} disabled={references.length >= 3} />
           </label>
-          {references.length > 0 && <>
+          {references.length > 0 &&
             <div className="reference-list">
               {references.map((reference) => <div className="reference-thumb" key={reference.id}><Image src={reference.preview} alt={reference.file.name} width={76} height={76} unoptimized /><button type="button" onClick={() => removeReference(reference.id)} aria-label={`Remove ${reference.file.name}`}><X size={13} /></button></div>)}
             </div>
-            <div className="reference-mode">
-              <button type="button" className={referenceMode === "inspire" ? "selected" : ""} onClick={() => setReferenceMode("inspire")}><strong>Use as inspiration</strong><span>Borrow the visual direction</span></button>
-              <button type="button" className={referenceMode === "preserve" ? "selected" : ""} onClick={() => setReferenceMode("preserve")}><strong>Preserve the subject</strong><span>Keep identity and key traits</span></button>
-            </div>
-          </>}
+          }
 
-          <div className="step-row section-step"><span>04</span><p>Choose the printed size</p></div>
+          <div className="step-row section-step"><span>03</span><p>Choose the printed size</p></div>
           <div className="print-option-grid">
             {printOptions.map((option) => <button type="button" className={variantId === option.variantId ? "print-option selected" : "print-option"} key={option.variantId} onClick={() => setVariantId(option.variantId)}><strong>{option.title}</strong><span>{option.productTitle}</span><small>{option.width} × {option.height}px print canvas</small></button>)}
           </div>
@@ -217,7 +173,7 @@ export function StickerStudio() {
 
           {design && (
             <div className="order-panel">
-              {design.demo && <div className="preview-notice">Preview mode — connect the remaining service credentials to sell live artwork.</div>}
+              {design.notice && <div className="preview-notice">{design.notice}</div>}
               <div className="pack-title"><strong>Choose your pack</strong><span>Free standard shipping</span></div>
               <div className="pack-grid">
                 {packs.map((pack) => (

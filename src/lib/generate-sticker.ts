@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { saveDesign } from "@/lib/db";
 import { generationSizeFor, prepareArtwork } from "@/lib/prepare-artwork";
 import { getPrintOption } from "@/lib/print-options";
+import { paidFlowReadiness } from "@/lib/runtime";
 import type { GenerateInput } from "@/lib/schemas";
 
 let openaiClient: OpenAI | null = null;
@@ -13,12 +14,7 @@ function getOpenAI() {
   return openaiClient;
 }
 
-const styleDirection: Record<GenerateInput["style"], string> = {
-  bold: "bold mascot illustration, thick confident outlines, punchy color blocking",
-  retro: "vintage screen-print illustration, limited warm palette, subtle ink texture",
-  minimal: "minimal vector icon, few precise shapes, crisp negative space",
-  weird: "cute surreal mascot, charmingly odd details, expressive and playful",
-};
+export class GenerationConfigurationError extends Error {}
 
 function safeReferenceUrl(value: string) {
   const url = new URL(value);
@@ -50,26 +46,20 @@ export function buildArtPrompt(
   canvas: { width: number; height: number; productTitle: string },
   opaqueBackground: boolean,
 ) {
-  const subjectRule =
-    input.subjectCount === 1
-      ? "Exactly ONE primary subject/object. Do not add companions, duplicates, scenery characters, or extra focal objects."
-      : "Exactly TWO primary subjects/objects, clearly grouped as one compact sticker composition. Do not add a third subject.";
   const referenceRule = input.referenceImageUrls.length
-    ? input.referenceMode === "preserve"
-      ? "Use the uploaded images as strict identity references. Preserve their defining shapes, colors, markings, and proportions while converting them into the requested sticker style."
-      : "Use the uploaded images as visual inspiration for subject, palette, and character, but create an original sticker composition."
-    : "No reference images are provided; follow the text description precisely.";
+    ? "The uploaded images are AUTHORITATIVE visual references, not loose inspiration. Preserve the referenced subject's identity, silhouette, anatomy, pose, proportions, colors, clothing, equipment, and defining details unless the user's brief explicitly requests a change. Change only what the user requests."
+    : "There are no reference images. Derive every creative decision from the user's brief; do not substitute a generic mascot, icon, or unrelated subject.";
 
   return [
-    `Create one original sticker illustration of: ${input.prompt}.`,
-    subjectRule,
+    "Create exactly one print-ready sticker illustration.",
+    `PRIMARY CREATIVE BRIEF — follow every explicit detail literally: “${input.prompt}”`,
     referenceRule,
-    `Visual direction: ${styleDirection[input.style]}.`,
+    "Before rendering, internally identify the requested subject, action, pose, expression, clothing, colors, held objects, object condition, and spatial relationships. The final image must visibly satisfy each applicable item.",
+    "Do not replace the requested subject with a symbol, flower, abstract icon, cute face, or generic mascot. Do not soften, simplify, or contradict requested traits such as strong, mean, broken, split, damaged, two-handed, or all-black.",
     `Intended Printify product: ${canvas.productTitle}. Final print canvas is ${canvas.width} by ${canvas.height} pixels, aspect ratio ${(canvas.width / canvas.height).toFixed(3)}.`,
-    `Sticker shape intent: ${input.shape}. Keep the complete subject centered inside the middle 82% of the canvas. No part of the subject or white border may touch an edge.`,
-    "Use a bold, continuous silhouette, sturdy outlines, a clean white kiss-cut border, and no tiny detached pieces or hairline details.",
-    "No mockup, hand, wall, product photo, sticker sheet, drop shadow, watermark, signature, brand logo, celebrity, or copyrighted character.",
-    "Avoid long text. If the prompt requires words, use at most four large legible words.",
+    "Keep the complete requested composition centered inside the middle 82% of the canvas. No requested body part, equipment, or white sticker border may be cropped or touch an edge.",
+    "Add only the clean white contour needed for a die-cut sticker. Do not introduce extra objects, words, logos, scenery, decorative motifs, or visual themes that the brief did not request.",
+    "No mockup, hand holding the sticker, wall, product photo, sticker sheet, presentation shadow, watermark, or signature.",
     opaqueBackground
       ? "Place the sticker alone on a perfectly flat, uniform pale gray background (#E8E8E8) extending to every canvas edge. The pale gray must not appear inside the sticker."
       : "Use a fully transparent background outside the sticker.",
@@ -82,19 +72,10 @@ export async function generateSticker(input: GenerateInput) {
   const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
   const opaqueBackground = model.startsWith("gpt-image-2");
   const artPrompt = buildArtPrompt(input, printOption, opaqueBackground);
-  const liveReady = Boolean(
-    process.env.OPENAI_API_KEY && process.env.BLOB_READ_WRITE_TOKEN && process.env.DATABASE_URL,
-  );
-
-  if (!liveReady) {
-    return {
-      id,
-      imageUrl: "/demo-sticker.svg",
-      artPrompt,
-      demo: true,
-      purchasable: false,
-      printOption,
-    };
+  if (!process.env.OPENAI_API_KEY) {
+    throw new GenerationConfigurationError(
+      "OpenAI image generation is not configured. Add OPENAI_API_KEY to Vercel and redeploy.",
+    );
   }
 
   const request = {
@@ -102,7 +83,7 @@ export async function generateSticker(input: GenerateInput) {
     prompt: artPrompt,
     n: 1,
     size: generationSizeFor(printOption.width, printOption.height),
-    quality: (process.env.OPENAI_IMAGE_QUALITY || "medium") as "low" | "medium" | "high",
+    quality: (process.env.OPENAI_IMAGE_QUALITY || "high") as "low" | "medium" | "high",
     output_format: "png" as const,
     ...(opaqueBackground ? { background: "opaque" as const } : { background: "transparent" as const }),
   };
@@ -123,6 +104,18 @@ export async function generateSticker(input: GenerateInput) {
       printOption,
       opaqueBackground,
     );
+    const canPersist = Boolean(process.env.BLOB_READ_WRITE_TOKEN && process.env.DATABASE_URL);
+    if (!canPersist) {
+      return {
+        id,
+        imageUrl: `data:image/png;base64,${artwork.toString("base64")}`,
+        artPrompt,
+        purchasable: false,
+        notice: "This is a real OpenAI result. Connect both Vercel Blob and Neon to save it and enable checkout.",
+        printOption,
+      };
+    }
+
     const blob = await put(`designs/${id}.png`, artwork, {
       access: "public",
       contentType: "image/png",
@@ -133,19 +126,29 @@ export async function generateSticker(input: GenerateInput) {
       id,
       prompt: input.prompt,
       art_prompt: artPrompt,
-      style: input.style,
-      shape: input.shape,
+      style: "prompt_only",
+      shape: "die_cut",
       image_url: blob.url,
       variant_id: printOption.variantId,
       print_canvas_width: printOption.width,
       print_canvas_height: printOption.height,
       print_area: printOption.position,
       decoration_method: printOption.decorationMethod,
-      subject_count: input.subjectCount,
+      subject_count: 1,
       reference_urls: input.referenceImageUrls,
     });
 
-    return { id, imageUrl: blob.url, artPrompt, demo: false, purchasable: true, printOption };
+    const readiness = paidFlowReadiness();
+    return {
+      id,
+      imageUrl: blob.url,
+      artPrompt,
+      purchasable: readiness.ready,
+      notice: readiness.ready
+        ? undefined
+        : `Artwork generated and saved. Checkout is waiting for: ${readiness.missing.join(", ")}.`,
+      printOption,
+    };
   } finally {
     if (input.referenceImageUrls.length) {
       await del(input.referenceImageUrls).catch((error) =>
