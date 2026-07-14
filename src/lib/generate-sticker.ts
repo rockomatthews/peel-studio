@@ -212,8 +212,10 @@ export async function generateSticker(input: GenerateInput) {
       };
     }
 
+    const uploadBody = new ArrayBuffer(artwork.byteLength);
+    new Uint8Array(uploadBody).set(artwork);
     const blob = await atStage("blob_storage", () =>
-      put(`designs/${id}.png`, artwork, {
+      put(`designs/${id}.png`, uploadBody, {
         access: "public",
         contentType: "image/png",
         addRandomSuffix: false,
